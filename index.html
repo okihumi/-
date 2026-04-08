@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>メイクリア 作業報告</title>
+<style>
+  :root {
+    --primary: #1A4A7A;
+    --accent:  #2E9ED9;
+    --light:   #EEF6FC;
+    --orange:  #E07B2A;
+    --danger:  #e74c3c;
+    --success: #27ae60;
+    --gray:    #666;
+    --border:  #dde5ee;
+    --white:   #fff;
+    --bg:      #f4f7fb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Arial, "Hiragino Sans", sans-serif;
+    background: var(--bg);
+    color: #222;
+    font-size: 15px;
+    min-height: 100vh;
+  }
+
+  /* ── ヘッダー ── */
+  .app-header {
+    background: var(--primary);
+    color: #fff;
+    padding: 14px 16px 0;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  }
+  .app-header-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; }
+  .app-header h1 { font-size: 17px; font-weight: 700; }
+  .app-header h1 span { color: var(--accent); }
+  .btn-settings {
+    background: rgba(255,255,255,.18); border: none; color: #fff;
+    padding: 5px 10px; border-radius: 6px; font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .sync-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #aaa;
+    display: inline-block; margin-left: 4px;
+  }
+  .sync-dot.ok  { background: #4caf50; }
+  .sync-dot.err { background: #f44336; }
+  .tab-bar { display: flex; gap: 4px; }
+  .tab-btn {
+    flex: 1; padding: 9px 0; border: none; border-radius: 6px 6px 0 0;
+    background: rgba(255,255,255,.15); color: rgba(255,255,255,.8);
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: .2s;
+  }
+  .tab-btn.active { background: var(--bg); color: var(--primary); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── フォーム ── */
+  .form-wrap { padding: 16px; max-width: 680px; margin: 0 auto; }
+
+  .section-card {
+    background: var(--white);
+    border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+  .section-title {
+    background: var(--primary); color: #fff;
+    font-size: 13px; font-weight: 700;
+    padding: 9px 14px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .section-title .icon { font-size: 16px; }
+  .section-body { padding: 14px; }
+
+  label.field-label {
+    display: block;
+    font-size: 12px; font-weight: 600;
+    color: var(--primary); margin-bottom: 4px; margin-top: 12px;
+  }
+  label.field-label:first-child { margin-top: 0; }
+  .required { color: var(--danger); margin-left: 2px; }
+  .hint { font-size: 11px; color: var(--gray); font-weight: 400; margin-left: 4px; }
+
+  input[type=text], input[type=date], input[type=time], input[type=number],
+  select, textarea {
+    width: 100%; padding: 10px 12px;
+    border: 1.5px solid var(--border); border-radius: 8px;
+    font-size: 15px; font-family: inherit;
+    background: #fafcff; transition: border .15s;
+    -webkit-appearance: none;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--accent); background: var(--white);
+  }
+  textarea { resize: vertical; min-height: 80px; }
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M0 0l6 8 6-8z' fill='%23666'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px;
+  }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .radio-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .radio-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px;
+    border: 1.5px solid var(--border); border-radius: 20px;
+    cursor: pointer; font-size: 14px; transition: .15s; background: #fafcff;
+  }
+  .radio-item:has(input:checked) {
+    border-color: var(--accent); background: var(--light);
+    color: var(--primary); font-weight: 600;
+  }
+  .radio-item input { accent-color: var(--accent); }
+
+  /* ── 風量テーブル ── */
+  .airflow-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  .airflow-table th {
+    background: var(--light); color: var(--primary);
+    font-size: 11px; padding: 7px 8px; text-align: center;
+    border: 1px solid var(--border);
+  }
+  .airflow-table td { padding: 6px 6px; border: 1px solid var(--border); vertical-align: middle; }
+  .airflow-table td:first-child { font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; }
+  .airflow-table input[type=number] {
+    padding: 6px 8px; font-size: 14px; text-align: right; width: 100%; min-width: 0;
+  }
+
+  /* ── サービスカード ── */
+  .service-card {
+    border: 1.5px solid var(--border); border-radius: 10px;
+    margin-bottom: 10px; overflow: hidden; transition: border .2s;
+  }
+  .service-card.checked { border-color: var(--accent); }
+
+  .service-toggle {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px; cursor: pointer;
+    font-size: 14px; font-weight: 600;
+    background: #fafcff; transition: background .15s;
+    -webkit-user-select: none; user-select: none;
+  }
+  .service-card.checked .service-toggle { background: var(--light); color: var(--primary); }
+  .service-toggle input[type=checkbox] {
+    width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0;
+  }
+
+  .service-detail {
+    display: none; padding: 12px 14px 14px;
+    border-top: 1px solid var(--border); background: var(--white);
+  }
+  .service-card.checked .service-detail { display: block; }
+
+  /* 作業前後の写真ペア */
+  .photo-pair {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  }
+  .photo-slot-label {
+    font-size: 11px; font-weight: 700; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .photo-slot-label.before { color: var(--orange); }
+  .photo-slot-label.after  { color: var(--success); }
+
+  .photo-upload-mini {
+    border: 2px dashed var(--border); border-radius: 8px;
+    padding: 12px 6px; text-align: center;
+    cursor: pointer; color: var(--gray); font-size: 11px;
+    background: #fafcff; transition: .15s;
+  }
+  .photo-upload-mini:hover { border-color: var(--accent); color: var(--accent); background: var(--light); }
+  .photo-upload-mini .up-icon { font-size: 22px; display: block; margin-bottom: 3px; }
+
+  .mini-preview-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; margin-top: 6px;
+  }
+  .mini-thumb {
+    position: relative; border-radius: 6px; overflow: hidden;
+    aspect-ratio: 1; background: #eee;
+  }
+  .mini-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .mini-thumb .del-btn {
+    position: absolute; top: 3px; right: 3px;
+    background: rgba(0,0,0,.6); color: #fff;
+    border: none; border-radius: 50%; width: 18px; height: 18px;
+    font-size: 10px; cursor: pointer; line-height: 18px; text-align: center;
+  }
+
+  /* ── 保存ボタン ── */
+  .btn-save {
+    display: block; width: 100%; padding: 15px;
+    background: var(--primary); color: #fff;
+    border: none; border-radius: 12px; font-size: 16px; font-weight: 700;
+    cursor: pointer; margin-top: 4px; transition: .2s; letter-spacing: .05em;
+  }
+  .btn-save:hover { background: #12325a; }
+  .btn-save:active { transform: scale(.98); }
+
+  /* ── 設定モーダル ── */
+  .settings-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.5); z-index: 400; overflow-y: auto;
+  }
+  .settings-overlay.open { display: flex; align-items: flex-end; }
+  .settings-modal {
+    background: var(--white); border-radius: 16px 16px 0 0;
+    width: 100%; padding: 20px 16px 36px;
+  }
+  .settings-modal h2 { font-size: 16px; color: var(--primary); margin-bottom: 16px; }
+  .settings-note { font-size: 12px; color: var(--gray); line-height: 1.7; margin-bottom: 12px; background: var(--light); padding: 10px 12px; border-radius: 8px; }
+  .btn-settings-save {
+    width: 100%; padding: 13px; background: var(--primary); color: #fff;
+    border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 8px;
+  }
+  .btn-open-sheet {
+    width: 100%; padding: 11px; background: #fff; color: var(--success);
+    border: 1.5px solid var(--success); border-radius: 10px;
+    font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px;
+  }
+  .btn-close-settings {
+    float: right; background: none; border: none; font-size: 22px; cursor: pointer; color: var(--gray); margin-top: -4px;
+  }
+
+  /* クラウドバッジ */
+  .cloud-badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 8px; font-weight: 600;
+    background: #e8f5e9; color: #27ae60;
+  }
+  .cloud-badge.pending { background: #fff3e0; color: #e07b2a; }
+
+  /* ── 一覧 ── */
+  .list-wrap { padding: 16px; max-width: 680px; margin: 0 auto; }
+  .list-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+  }
+  .list-header h2 { font-size: 15px; color: var(--primary); font-weight: 700; }
+  .btn-export {
+    padding: 7px 14px; background: var(--accent); color: #fff;
+    border: none; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .search-box {
+    width: 100%; padding: 10px 12px;
+    border: 1.5px solid var(--border); border-radius: 8px;
+    font-size: 14px; margin-bottom: 12px; background: #fafcff;
+  }
+  .report-card {
+    background: var(--white); border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    padding: 14px; margin-bottom: 10px;
+    cursor: pointer; transition: .2s; border-left: 4px solid var(--accent);
+  }
+  .report-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.12); transform: translateY(-1px); }
+  .report-card .rc-date { font-size: 11px; color: var(--gray); margin-bottom: 3px; }
+  .report-card .rc-name { font-size: 16px; font-weight: 700; color: var(--primary); }
+  .report-card .rc-sub  { font-size: 12px; color: var(--gray); margin-top: 4px; }
+  .report-card .rc-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
+  .tag {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    background: var(--light); color: var(--primary); font-weight: 600;
+  }
+  .tag.pay-cash { background: #fff3e0; color: #e07b2a; }
+  .tag.pay-card { background: #e8f5e9; color: #27ae60; }
+  .tag.pay-ato  { background: #f3e5f5; color: #7b1fa2; }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--gray); }
+  .empty-state .em-icon { font-size: 48px; margin-bottom: 12px; }
+
+  /* ── モーダル ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.5); z-index: 200; overflow-y: auto;
+  }
+  .modal-overlay.open { display: block; }
+  .modal {
+    background: var(--white); border-radius: 16px 16px 0 0;
+    margin-top: 40px; min-height: calc(100vh - 40px); padding: 0 0 40px;
+  }
+  .modal-head {
+    background: var(--primary); color: #fff;
+    padding: 16px; border-radius: 16px 16px 0 0;
+    display: flex; justify-content: space-between; align-items: center;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .modal-head h2 { font-size: 16px; }
+  .modal-close {
+    background: rgba(255,255,255,.2); border: none; color: #fff;
+    width: 32px; height: 32px; border-radius: 50%; font-size: 18px;
+    cursor: pointer; line-height: 32px; text-align: center;
+  }
+  .modal-body { padding: 16px; }
+  .detail-section { margin-bottom: 20px; }
+  .detail-section h3 {
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    text-transform: uppercase; letter-spacing: .05em;
+    border-bottom: 1px solid var(--border); padding-bottom: 5px; margin-bottom: 10px;
+  }
+  .detail-row { display: flex; gap: 8px; margin-bottom: 6px; font-size: 14px; }
+  .detail-row .dk { min-width: 80px; color: var(--gray); font-size: 12px; font-weight: 600; padding-top: 1px; }
+  .detail-row .dv { flex: 1; }
+
+  /* 詳細サービスカード */
+  .detail-svc-card {
+    border: 1.5px solid var(--accent); border-radius: 10px;
+    margin-bottom: 12px; overflow: hidden;
+  }
+  .detail-svc-name {
+    background: var(--light); color: var(--primary);
+    font-size: 14px; font-weight: 700;
+    padding: 9px 12px;
+  }
+  .detail-photo-pair {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+  }
+  .detail-photo-col { padding: 10px; }
+  .detail-photo-col:first-child { border-right: 1px solid var(--border); }
+  .detail-photo-col-label {
+    font-size: 11px; font-weight: 700; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .detail-photo-col-label.before { color: var(--orange); }
+  .detail-photo-col-label.after  { color: var(--success); }
+  .detail-photos-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 5px; }
+  .detail-photos-grid img {
+    width: 100%; aspect-ratio: 1; object-fit: cover;
+    border-radius: 6px; cursor: pointer;
+  }
+  .no-photo { font-size: 11px; color: var(--gray); text-align: center; padding: 10px 0; }
+
+  .modal-btns { display: flex; gap: 8px; margin-top: 20px; }
+  .btn-del {
+    flex: 1; padding: 12px; background: #fff; color: var(--danger);
+    border: 1.5px solid var(--danger); border-radius: 10px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .btn-print {
+    flex: 2; padding: 12px; background: var(--primary); color: #fff;
+    border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+
+  /* ── トースト ── */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #222; color: #fff; padding: 10px 22px; border-radius: 24px;
+    font-size: 14px; font-weight: 600; z-index: 999;
+    opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ── ライトボックス ── */
+  .lightbox {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.9); z-index: 300;
+    justify-content: center; align-items: center;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 95vw; max-height: 90vh; border-radius: 4px; }
+  .lightbox .lb-close {
+    position: absolute; top: 16px; right: 16px;
+    background: rgba(255,255,255,.2); border: none; color: #fff;
+    width: 36px; height: 36px; border-radius: 50%; font-size: 20px;
+    cursor: pointer; line-height: 36px; text-align: center;
+  }
+
+  @media print {
+    .app-header, .modal-btns, .modal-close { display: none !important; }
+    .modal-overlay { position: static; background: none; }
+    .modal { border-radius: 0; margin: 0; min-height: unset; }
+    .modal-head { background: #1A4A7A !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { background: white; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<div class="app-header">
+  <div class="app-header-top">
+    <h1>🌬️ メイクリア <span>作業報告</span></h1>
+    <button class="btn-settings" onclick="openSettings()">⚙️ 設定 <span class="sync-dot" id="syncDot"></span></button>
+  </div>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('form')">📝 新規報告</button>
+    <button class="tab-btn" onclick="switchTab('list')">📋 報告一覧</button>
+  </div>
+</div>
+
+<!-- ===== 新規報告フォーム ===== -->
+<div id="tab-form" class="tab-content active">
+<div class="form-wrap">
+
+  <!-- 基本情報 -->
+  <div class="section-card">
+    <div class="section-title"><span class="icon">🏢</span>基本情報</div>
+    <div class="section-body">
+      <label class="field-label">物件名<span class="hint">※戸建は無記入</span></label>
+      <input type="text" id="f-property" placeholder="例：〇〇マンション101号室">
+
+      <label class="field-label">プラットフォーム<span class="required">*</span></label>
+      <select id="f-platform">
+        <option value="">選択してください</option>
+        <option value="自社HP">自社HP</option>
+        <option value="くらしのマーケット">くらしのマーケット</option>
+        <option value="ミツモア">ミツモア</option>
+        <option value="リベ">リベ</option>
+        <option value="その他">その他</option>
+      </select>
+
+      <label class="field-label">住所<span class="required">*</span></label>
+      <input type="text" id="f-address" placeholder="例：東京都中央区日本橋〇〇">
+
+      <div class="row2">
+        <div>
+          <label class="field-label">作業日<span class="required">*</span></label>
+          <input type="date" id="f-date">
+        </div>
+        <div>
+          <label class="field-label">作業員名</label>
+          <select id="f-worker">
+            <option value="">選択してください</option>
+            <option value="染谷">染谷</option>
+            <option value="濱本">濱本</option>
+            <option value="山田">山田</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div>
+          <label class="field-label">開始時刻</label>
+          <input type="time" id="f-start-time">
+        </div>
+        <div>
+          <label class="field-label">終了時刻</label>
+          <input type="time" id="f-end-time">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 風量測定 -->
+  <div class="section-card">
+    <div class="section-title"><span class="icon">💨</span>風量測定</div>
+    <div class="section-body">
+      <p style="font-size:12px;color:var(--gray);margin-bottom:8px;">清掃前後の風量（m³/h）を記録してください。</p>
+      <table class="airflow-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;">箇所</th>
+            <th>清掃前<br>風量</th>
+            <th>清掃後<br>風量</th>
+          </tr>
+        </thead>
+        <tbody id="airflowBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- サービス内容 -->
+  <div class="section-card">
+    <div class="section-title"><span class="icon">🔧</span>サービス内容</div>
+    <div class="section-body">
+      <p style="font-size:12px;color:var(--gray);margin-bottom:10px;">実施したサービスを選択し、作業前後の写真を追加してください。</p>
+      <div id="serviceCards"></div>
+
+      <label class="field-label" style="margin-top:14px;">合計金額（税込）<span class="required">*</span></label>
+      <input type="number" id="f-amount" placeholder="例：25300" min="0" step="100">
+
+      <label class="field-label">支払い方法<span class="required">*</span></label>
+      <div class="radio-row">
+        <label class="radio-item"><input type="radio" name="payment" value="現金"> 💴 現金</label>
+        <label class="radio-item"><input type="radio" name="payment" value="カード決済"> 💳 カード決済</label>
+        <label class="radio-item"><input type="radio" name="payment" value="ATO払い"> 📱 ATO払い</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- 備考 -->
+  <div class="section-card">
+    <div class="section-title"><span class="icon">📝</span>備考・特記事項</div>
+    <div class="section-body">
+      <textarea id="f-notes" placeholder="施工時の気づき、次回推奨事項、顧客からの要望など…"></textarea>
+    </div>
+  </div>
+
+  <button class="btn-save" onclick="saveReport()">✅ 作業報告を保存する</button>
+  <div style="height:20px;"></div>
+</div>
+</div>
+
+<!-- ===== 報告一覧 ===== -->
+<div id="tab-list" class="tab-content">
+<div class="list-wrap">
+  <div class="list-header">
+    <h2 id="listCount">報告一覧（0件）</h2>
+    <button class="btn-export" onclick="exportCSV()">📊 CSV出力</button>
+  </div>
+  <div id="cloudBanner" style="display:none; margin-bottom:10px;">
+    <button onclick="openSheet()" style="width:100%;padding:10px;background:#e8f5e9;color:#27ae60;border:1.5px solid #27ae60;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">
+      📊 Googleスプレッドシートで全員の報告を確認する →
+    </button>
+  </div>
+  <input class="search-box" type="text" id="searchBox" placeholder="🔍 物件名・住所で検索…" oninput="renderList()">
+  <div id="reportList"></div>
+</div>
+</div>
+
+<!-- ===== 詳細モーダル ===== -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" id="modalContent">
+    <div class="modal-head">
+      <h2 id="modalTitle">作業報告詳細</h2>
+      <button class="modal-close" onclick="closeModalDirect()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ===== 設定モーダル ===== -->
+<div class="settings-overlay" id="settingsOverlay" onclick="closeSettingsOutside(event)">
+  <div class="settings-modal">
+    <button class="btn-close-settings" onclick="closeSettings()">✕</button>
+    <h2>⚙️ クラウド連携設定</h2>
+    <div class="settings-note">
+      Google Apps ScriptのデプロイURLを入力すると、作業報告がGoogleスプレッドシートに自動保存されます。<br>
+      染谷さんはスプレッドシートを開くだけで全員の報告を確認できます。
+    </div>
+
+    <label class="field-label">GAS デプロイURL<span class="required">*</span></label>
+    <input type="text" id="s-gasUrl" placeholder="https://script.google.com/macros/s/..." style="font-size:12px;">
+
+    <label class="field-label" style="margin-top:12px;">スプレッドシートURL（管理者用）</label>
+    <input type="text" id="s-sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." style="font-size:12px;">
+
+    <button class="btn-settings-save" onclick="saveSettings()">💾 設定を保存</button>
+    <button class="btn-open-sheet" id="btnOpenSheet" onclick="openSheet()" style="display:none;">📊 スプレッドシートを開く</button>
+  </div>
+</div>
+
+<!-- ライトボックス -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lb-close" onclick="closeLightbox()">✕</button>
+  <img id="lbImg" src="" alt="">
+</div>
+
+<!-- トースト -->
+<div class="toast" id="toast"></div>
+
+<!-- 非表示のファイル入力（サービスごと×前後） -->
+<div id="hiddenInputs" style="display:none;"></div>
+
+<script>
+// ===== 定数 =====
+const STORAGE_KEY    = 'maklear_reports_v2';
+const SETTINGS_KEY   = 'maklear_settings';
+
+// ===== 設定 =====
+function getSettings() {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); }
+  catch { return {}; }
+}
+function openSettings() {
+  const s = getSettings();
+  document.getElementById('s-gasUrl').value   = s.gasUrl   || '';
+  document.getElementById('s-sheetUrl').value = s.sheetUrl || '';
+  document.getElementById('btnOpenSheet').style.display = s.sheetUrl ? 'block' : 'none';
+  document.getElementById('settingsOverlay').classList.add('open');
+}
+function closeSettings() {
+  document.getElementById('settingsOverlay').classList.remove('open');
+}
+function closeSettingsOutside(e) {
+  if (e.target === document.getElementById('settingsOverlay')) closeSettings();
+}
+function saveSettings() {
+  const gasUrl   = document.getElementById('s-gasUrl').value.trim();
+  const sheetUrl = document.getElementById('s-sheetUrl').value.trim();
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ gasUrl, sheetUrl }));
+  document.getElementById('btnOpenSheet').style.display = sheetUrl ? 'block' : 'none';
+  updateSyncDot(gasUrl ? 'ok' : '');
+  closeSettings();
+  showToast('✅ 設定を保存しました');
+}
+function openSheet() {
+  const url = getSettings().sheetUrl;
+  if (url) window.open(url, '_blank');
+}
+function updateSyncDot(state) {
+  const dot = document.getElementById('syncDot');
+  dot.className = 'sync-dot' + (state === 'ok' ? ' ok' : state === 'err' ? ' err' : '');
+}
+
+// ===== GAS送信 =====
+async function postToGas(report) {
+  const { gasUrl } = getSettings();
+  if (!gasUrl) return;
+  try {
+    // 写真を圧縮（GAS送信用に小さく）
+    const compressed = JSON.parse(JSON.stringify(report));
+    for (const svc of compressed.services || []) {
+      for (const phase of ['pre', 'post']) {
+        svc.photos[phase] = await Promise.all(
+          (svc.photos[phase] || []).map(p => compressForGas(p.dataUrl).then(d => ({ ...p, dataUrl: d })))
+        );
+      }
+    }
+    fetch(gasUrl, {
+      method:  'POST',
+      mode:    'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body:    JSON.stringify(compressed),
+    });
+    // no-corsのためレスポンスは読めないが送信は完了
+    updateSyncDot('ok');
+    // ローカルに送信済みマーク
+    const reports = getReports();
+    const idx = reports.findIndex(r => r.id === report.id);
+    if (idx !== -1) { reports[idx].synced = true; saveReports(reports); }
+  } catch (err) {
+    updateSyncDot('err');
+    console.warn('GAS送信エラー:', err);
+  }
+}
+
+// 写真をGAS送信用に圧縮（最大600px, 品質0.5）
+function compressForGas(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ratio  = Math.min(1, 600 / Math.max(img.width, img.height));
+      canvas.width  = img.width  * ratio;
+      canvas.height = img.height * ratio;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.5));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+const AIRFLOW_LOCATIONS = [
+  { id: 'kitchen', label: 'キッチン' },
+  { id: 'bath',    label: '浴室系統' },
+  { id: 'dryer',   label: '乾燥機'  },
+];
+
+const SERVICES = [
+  '①キッチンダクト',
+  '②浴室、トイレ、洗面台ダクト',
+  '③キッチンお掃除セット',
+  '④浴室周りお掃除セット',
+  '⑤ダクトフルセット',
+  '⑥ガス乾燥機ダクト',
+  '⑦レジスター交換',
+  '⑧その他',
+];
+
+// svcPhotos[svcIndex] = { pre: [{dataUrl, name}], post: [{dataUrl, name}] }
+let svcPhotos = {};
+
+// ===== データ =====
+function getReports() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+  catch { return []; }
+}
+function saveReports(arr) { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+
+// ===== 初期化 =====
+function init() {
+  // 風量テーブル
+  const tbody = document.getElementById('airflowBody');
+  AIRFLOW_LOCATIONS.forEach(loc => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${loc.label}</td>
+      <td><input type="number" id="pre-${loc.id}" placeholder="—" min="0"></td>
+      <td><input type="number" id="post-${loc.id}" placeholder="—" min="0"></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // サービスカード
+  const container = document.getElementById('serviceCards');
+  const hiddenInputs = document.getElementById('hiddenInputs');
+  SERVICES.forEach((svc, i) => {
+    svcPhotos[i] = { pre: [], post: [] };
+
+    // 隠しファイル入力（前・後）
+    ['pre','post'].forEach(phase => {
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
+      inp.id = `file-${i}-${phase}`;
+      inp.addEventListener('change', e => handleSvcPhoto(e, i, phase));
+      hiddenInputs.appendChild(inp);
+    });
+
+    // カード
+    const card = document.createElement('div');
+    card.className = 'service-card';
+    card.id = `svc-card-${i}`;
+    card.innerHTML = `
+      <label class="service-toggle">
+        <input type="checkbox" id="svc-check-${i}" onchange="toggleServiceCard(${i})">
+        ${svc}
+      </label>
+      <div class="service-detail">
+        <div class="photo-pair">
+          <div>
+            <div class="photo-slot-label before">📷 作業前</div>
+            <div class="photo-upload-mini" onclick="document.getElementById('file-${i}-pre').click()">
+              <span class="up-icon">+</span>写真を追加
+            </div>
+            <div class="mini-preview-grid" id="prev-${i}-pre"></div>
+          </div>
+          <div>
+            <div class="photo-slot-label after">📷 作業後</div>
+            <div class="photo-upload-mini" onclick="document.getElementById('file-${i}-post').click()">
+              <span class="up-icon">+</span>写真を追加
+            </div>
+            <div class="mini-preview-grid" id="prev-${i}-post"></div>
+          </div>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  document.getElementById('f-date').value = new Date(Date.now() + 9*3600000).toISOString().slice(0,10);
+
+  // 設定済みならsyncDotを表示
+  const { gasUrl } = getSettings();
+  if (gasUrl) updateSyncDot('ok');
+
+  renderList();
+}
+
+// ===== サービスカード開閉 =====
+function toggleServiceCard(i) {
+  const card = document.getElementById(`svc-card-${i}`);
+  const checked = document.getElementById(`svc-check-${i}`).checked;
+  card.classList.toggle('checked', checked);
+}
+
+// ===== 写真処理 =====
+function handleSvcPhoto(e, svcIndex, phase) {
+  const files = Array.from(e.target.files);
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxW = 1200;
+        const ratio = Math.min(1, maxW / img.width);
+        canvas.width  = img.width  * ratio;
+        canvas.height = img.height * ratio;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const compressed = canvas.toDataURL('image/jpeg', 0.75);
+        svcPhotos[svcIndex][phase].push({ dataUrl: compressed, name: file.name });
+        renderSvcPreviews(svcIndex, phase);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  e.target.value = '';
+}
+
+function renderSvcPreviews(svcIndex, phase) {
+  const grid = document.getElementById(`prev-${svcIndex}-${phase}`);
+  grid.innerHTML = '';
+  svcPhotos[svcIndex][phase].forEach((p, j) => {
+    const div = document.createElement('div');
+    div.className = 'mini-thumb';
+    div.innerHTML = `
+      <img src="${p.dataUrl}" onclick="openLightbox('${p.dataUrl}')">
+      <button class="del-btn" onclick="removeSvcPhoto(${svcIndex},'${phase}',${j})">✕</button>
+    `;
+    grid.appendChild(div);
+  });
+}
+
+function removeSvcPhoto(svcIndex, phase, j) {
+  svcPhotos[svcIndex][phase].splice(j, 1);
+  renderSvcPreviews(svcIndex, phase);
+}
+
+// ===== 保存 =====
+function saveReport() {
+  const property = document.getElementById('f-property').value.trim();
+  const address  = document.getElementById('f-address').value.trim();
+  const date      = document.getElementById('f-date').value;
+  const worker    = document.getElementById('f-worker').value;
+  const startTime = document.getElementById('f-start-time').value;
+  const endTime   = document.getElementById('f-end-time').value;
+  const platform  = document.getElementById('f-platform').value;
+  const amount   = document.getElementById('f-amount').value;
+  const payment  = document.querySelector('input[name=payment]:checked');
+  const notes    = document.getElementById('f-notes').value.trim();
+
+  if (!address)  { showToast('⚠️ 住所を入力してください'); return; }
+  if (!platform) { showToast('⚠️ プラットフォームを選択してください'); return; }
+  if (!date)     { showToast('⚠️ 作業日を入力してください'); return; }
+  if (!amount)   { showToast('⚠️ 合計金額を入力してください'); return; }
+  if (!payment)  { showToast('⚠️ 支払い方法を選択してください'); return; }
+
+  // 風量
+  const airflow = AIRFLOW_LOCATIONS.map(loc => ({
+    id: loc.id, label: loc.label,
+    pre:  document.getElementById(`pre-${loc.id}`).value,
+    post: document.getElementById(`post-${loc.id}`).value,
+  }));
+
+  // サービス
+  const services = SERVICES
+    .map((name, i) => ({
+      name,
+      checked: document.getElementById(`svc-check-${i}`).checked,
+      photos: {
+        pre:  [...(svcPhotos[i]?.pre  || [])],
+        post: [...(svcPhotos[i]?.post || [])],
+      }
+    }))
+    .filter(s => s.checked);
+
+  const report = {
+    id:        Date.now().toString(),
+    property, address, date, worker, startTime, endTime, platform,
+    amount:    parseInt(amount),
+    payment:   payment.value,
+    airflow, services, notes,
+    createdAt: new Date().toISOString(),
+  };
+
+  const reports = getReports();
+  reports.unshift(report);
+  saveReports(reports);
+
+  showToast('✅ 作業報告を保存しました');
+  resetForm();
+  switchTab('list');
+
+  // クラウドに非同期送信
+  const { gasUrl } = getSettings();
+  if (gasUrl) {
+    showToast('☁️ クラウドに送信中...');
+    postToGas(report);
+  }
+}
+
+function resetForm() {
+  document.getElementById('f-property').value = '';
+  document.getElementById('f-address').value  = '';
+  document.getElementById('f-date').value = new Date(Date.now() + 9*3600000).toISOString().slice(0,10);
+  document.getElementById('f-worker').value = '';
+  document.getElementById('f-start-time').value = '';
+  document.getElementById('f-end-time').value = '';
+  document.getElementById('f-platform').value = '';
+  document.getElementById('f-amount').value = '';
+  document.getElementById('f-notes').value  = '';
+  document.querySelectorAll('input[name=payment]').forEach(r => r.checked = false);
+  AIRFLOW_LOCATIONS.forEach(loc => {
+    document.getElementById(`pre-${loc.id}`).value  = '';
+    document.getElementById(`post-${loc.id}`).value = '';
+  });
+  SERVICES.forEach((_, i) => {
+    document.getElementById(`svc-check-${i}`).checked = false;
+    document.getElementById(`svc-card-${i}`).classList.remove('checked');
+    svcPhotos[i] = { pre: [], post: [] };
+    renderSvcPreviews(i, 'pre');
+    renderSvcPreviews(i, 'post');
+  });
+}
+
+// ===== 一覧 =====
+function renderList() {
+  const reports = getReports();
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  const filtered = q
+    ? reports.filter(r =>
+        (r.property || '').toLowerCase().includes(q) ||
+        r.address.toLowerCase().includes(q)
+      )
+    : reports;
+
+  document.getElementById('listCount').textContent = `報告一覧（${filtered.length}件）`;
+  // スプレッドシートURLが設定されていればバナーを表示
+  const { sheetUrl } = getSettings();
+  document.getElementById('cloudBanner').style.display = sheetUrl ? 'block' : 'none';
+  const container = document.getElementById('reportList');
+
+  if (!filtered.length) {
+    container.innerHTML = `<div class="empty-state"><div class="em-icon">📋</div><p>${q ? '検索結果がありません' : 'まだ報告がありません'}</p></div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(r => {
+    const payClass = r.payment === '現金' ? 'pay-cash' : r.payment === 'カード決済' ? 'pay-card' : 'pay-ato';
+    const displayName = r.property || '戸建';
+    return `
+      <div class="report-card" onclick="openModal('${r.id}')">
+        <div class="rc-date">${formatDate(r.date)}${r.startTime || r.endTime ? '　' + (r.startTime || '') + '〜' + (r.endTime || '') : ''}${r.worker ? '　担当：' + r.worker : ''}</div>
+        <div class="rc-name">${displayName}</div>
+        <div class="rc-sub">${r.address}</div>
+        <div class="rc-tags">
+          ${r.platform ? `<span class="tag" style="background:#f0f4ff;color:#3a4a8a;">${r.platform}</span>` : ''}
+          <span class="tag ${payClass}">${r.payment}</span>
+          <span class="tag">¥${r.amount.toLocaleString()}</span>
+          ${r.services.length > 0 ? `<span class="tag">${r.services.length}サービス</span>` : ''}
+          ${r.synced ? `<span class="cloud-badge">☁️ 送信済</span>` : `<span class="cloud-badge pending">📱 端末のみ</span>`}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ===== モーダル =====
+function openModal(id) {
+  const r = getReports().find(x => x.id === id);
+  if (!r) return;
+
+  const displayName = r.property || '戸建';
+  document.getElementById('modalTitle').textContent = displayName;
+
+  // 風量テーブル
+  const airflowWithData = (r.airflow || []).filter(a => a.pre || a.post);
+  const airflowHtml = airflowWithData.length > 0 ? `
+    <div class="detail-section">
+      <h3>風量測定</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <tr style="background:var(--light);">
+          <th style="padding:5px 8px;text-align:left;border:1px solid var(--border);font-size:11px;">箇所</th>
+          <th style="padding:5px 8px;border:1px solid var(--border);font-size:11px;">清掃前</th>
+          <th style="padding:5px 8px;border:1px solid var(--border);font-size:11px;">清掃後</th>
+        </tr>
+        ${airflowWithData.map(a => `
+          <tr>
+            <td style="padding:5px 8px;font-size:13px;font-weight:600;">${a.label}</td>
+            <td style="padding:5px 8px;font-size:13px;text-align:center;">${a.pre ? a.pre + ' m³/h' : '—'}</td>
+            <td style="padding:5px 8px;font-size:13px;text-align:center;">${a.post ? a.post + ' m³/h' : '—'}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>` : '';
+
+  // サービスカード
+  const servicesHtml = r.services.length > 0 ? `
+    <div class="detail-section">
+      <h3>サービス内容</h3>
+      ${r.services.map(s => {
+        const preHtml = s.photos.pre.length > 0
+          ? `<div class="detail-photos-grid">${s.photos.pre.map(p => `<img src="${p.dataUrl}" onclick="openLightbox('${p.dataUrl}')" loading="lazy">`).join('')}</div>`
+          : '<div class="no-photo">写真なし</div>';
+        const postHtml = s.photos.post.length > 0
+          ? `<div class="detail-photos-grid">${s.photos.post.map(p => `<img src="${p.dataUrl}" onclick="openLightbox('${p.dataUrl}')" loading="lazy">`).join('')}</div>`
+          : '<div class="no-photo">写真なし</div>';
+        return `
+          <div class="detail-svc-card">
+            <div class="detail-svc-name">${s.name}</div>
+            <div class="detail-photo-pair">
+              <div class="detail-photo-col">
+                <div class="detail-photo-col-label before">📷 作業前</div>
+                ${preHtml}
+              </div>
+              <div class="detail-photo-col">
+                <div class="detail-photo-col-label after">📷 作業後</div>
+                ${postHtml}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>` : '';
+
+  const payClass = r.payment === '現金' ? 'pay-cash' : r.payment === 'カード決済' ? 'pay-card' : 'pay-ato';
+
+  document.getElementById('modalBody').innerHTML = `
+    <div class="detail-section">
+      <h3>基本情報</h3>
+      <div class="detail-row"><span class="dk">物件名</span><span class="dv" style="font-weight:700;">${displayName}</span></div>
+      <div class="detail-row"><span class="dk">住所</span><span class="dv">${r.address}</span></div>
+      <div class="detail-row"><span class="dk">作業日</span><span class="dv">${formatDate(r.date)}</span></div>
+      <div class="detail-row"><span class="dk">作業員</span><span class="dv">${r.worker || '—'}</span></div>
+      <div class="detail-row"><span class="dk">作業時間</span><span class="dv">${r.startTime || r.endTime ? (r.startTime || '') + ' 〜 ' + (r.endTime || '') : '—'}</span></div>
+      <div class="detail-row"><span class="dk">プラットフォーム</span><span class="dv">${r.platform || '—'}</span></div>
+    </div>
+
+    ${airflowHtml}
+    ${servicesHtml}
+
+    <div class="detail-section">
+      <h3>料金・支払い</h3>
+      <div class="detail-row">
+        <span class="dk">合計金額</span>
+        <span class="dv" style="font-size:20px;font-weight:700;color:var(--primary);">¥${r.amount.toLocaleString()}</span>
+      </div>
+      <div class="detail-row">
+        <span class="dk">支払い</span>
+        <span class="dv"><span class="tag ${payClass}">${r.payment}</span></span>
+      </div>
+    </div>
+
+    ${r.notes ? `<div class="detail-section">
+      <h3>備考</h3>
+      <p style="font-size:14px;line-height:1.7;white-space:pre-wrap;">${r.notes}</p>
+    </div>` : ''}
+
+    <div class="modal-btns">
+      <button class="btn-del" onclick="deleteReport('${r.id}')">🗑️ 削除</button>
+      <button class="btn-print" onclick="window.print()">🖨️ 印刷・PDF保存</button>
+    </div>
+  `;
+
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modalOverlay')) closeModalDirect();
+}
+function closeModalDirect() {
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+function deleteReport(id) {
+  if (!confirm('この報告を削除しますか？')) return;
+  saveReports(getReports().filter(r => r.id !== id));
+  closeModalDirect(); renderList();
+  showToast('🗑️ 削除しました');
+}
+
+// ===== CSV出力 =====
+function exportCSV() {
+  const reports = getReports();
+  if (!reports.length) { showToast('⚠️ 報告がありません'); return; }
+  const headers = ['作業日','開始時刻','終了時刻','物件名','住所','作業員','プラットフォーム','サービス','合計金額','支払い方法','備考'];
+  const rows = reports.map(r => [
+    r.date, r.startTime || '', r.endTime || '', r.property || '戸建', r.address, r.worker,
+    r.platform || '',
+    (r.services || []).map(s => s.name).join(' / '),
+    r.amount, r.payment,
+    (r.notes || '').replace(/\n/g, ' '),
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = `メイクリア_作業報告_${new Date(Date.now() + 9*3600000).toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('📊 CSVを出力しました');
+}
+
+// ===== ライトボックス =====
+function openLightbox(src) {
+  document.getElementById('lbImg').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
+
+// ===== タブ切替 =====
+function switchTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.querySelectorAll('.tab-btn')[tab === 'form' ? 0 : 1].classList.add('active');
+  if (tab === 'list') renderList();
+}
+
+// ===== ユーティリティ =====
+function formatDate(d) {
+  if (!d) return '—';
+  const [y, m, day] = d.split('-');
+  return `${y}年${parseInt(m)}月${parseInt(day)}日`;
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+init();
+</script>
+</body>
+</html>
