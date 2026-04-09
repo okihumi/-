@@ -409,8 +409,8 @@
         <option value="その他">その他</option>
       </select>
 
-      <label class="field-label">住所<span class="required">*</span></label>
-      <input type="text" id="f-address" placeholder="例：東京都中央区日本橋〇〇">
+      <label class="field-label">お客様氏名<span class="hint">※空室の場合は無記入</span></label>
+      <input type="text" id="f-address" placeholder="例：山田太郎">
 
       <div class="row2">
         <div>
@@ -438,24 +438,6 @@
           <input type="time" id="f-end-time">
         </div>
       </div>
-    </div>
-  </div>
-
-  <!-- 風量測定 -->
-  <div class="section-card">
-    <div class="section-title"><span class="icon">💨</span>風量測定</div>
-    <div class="section-body">
-      <p style="font-size:12px;color:var(--gray);margin-bottom:8px;">清掃前後の風量（m³/h）を記録してください。</p>
-      <table class="airflow-table">
-        <thead>
-          <tr>
-            <th style="text-align:left;">箇所</th>
-            <th>清掃前<br>風量</th>
-            <th>清掃後<br>風量</th>
-          </tr>
-        </thead>
-        <tbody id="airflowBody"></tbody>
-      </table>
     </div>
   </div>
 
@@ -642,21 +624,14 @@ function compressForGas(dataUrl) {
   });
 }
 
-const AIRFLOW_LOCATIONS = [
-  { id: 'kitchen', label: 'キッチン' },
-  { id: 'bath',    label: '浴室系統' },
-  { id: 'dryer',   label: '乾燥機'  },
-];
-
-const SERVICES = [
-  '①キッチンダクト',
-  '②浴室、トイレ、洗面台ダクト',
-  '③キッチンお掃除セット',
-  '④浴室周りお掃除セット',
-  '⑤ダクトフルセット',
-  '⑥ガス乾燥機ダクト',
-  '⑦レジスター交換',
-  '⑧その他',
+const SERVICE_CONFIG = [
+  { name: 'キッチンダクト',             airflow: { id: 'kitchen', label: 'キッチン' } },
+  { name: 'キッチンレンジフード' },
+  { name: '浴室、トイレ、洗面台ダクト',   airflow: { id: 'bath',    label: '浴室系統' } },
+  { name: '浴室系換気扇' },
+  { name: 'ガス乾燥機ダクト',           airflow: { id: 'dryer', label: '乾燥機' } },
+  { name: 'レジスター交換' },
+  { name: 'その他' },
 ];
 
 // svcPhotos[svcIndex] = { pre: [{dataUrl, name}], post: [{dataUrl, name}] }
@@ -671,22 +646,10 @@ function saveReports(arr) { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr
 
 // ===== 初期化 =====
 function init() {
-  // 風量テーブル
-  const tbody = document.getElementById('airflowBody');
-  AIRFLOW_LOCATIONS.forEach(loc => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${loc.label}</td>
-      <td><input type="number" id="pre-${loc.id}" placeholder="—" min="0"></td>
-      <td><input type="number" id="post-${loc.id}" placeholder="—" min="0"></td>
-    `;
-    tbody.appendChild(tr);
-  });
-
   // サービスカード
   const container = document.getElementById('serviceCards');
   const hiddenInputs = document.getElementById('hiddenInputs');
-  SERVICES.forEach((svc, i) => {
+  SERVICE_CONFIG.forEach((cfg, i) => {
     svcPhotos[i] = { pre: [], post: [] };
 
     // 隠しファイル入力（前・後）
@@ -698,6 +661,23 @@ function init() {
       hiddenInputs.appendChild(inp);
     });
 
+    // 風量測定HTML
+    const airHtml = cfg.airflow ? `
+      <div style="background:var(--light);border-radius:8px;padding:10px 12px;margin-top:8px;">
+        <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:6px;">💨 風量測定（${cfg.airflow.label}）</div>
+        <div class="row2">
+          <div>
+            <label class="field-label" style="margin-top:0;">清掃前(m³/h)</label>
+            <input type="number" id="pre-${cfg.airflow.id}" placeholder="—" min="0">
+          </div>
+          <div>
+            <label class="field-label" style="margin-top:0;">清掃後(m³/h)</label>
+            <input type="number" id="post-${cfg.airflow.id}" placeholder="—" min="0">
+          </div>
+        </div>
+      </div>
+    ` : '';
+
     // カード
     const card = document.createElement('div');
     card.className = 'service-card';
@@ -705,9 +685,10 @@ function init() {
     card.innerHTML = `
       <label class="service-toggle">
         <input type="checkbox" id="svc-check-${i}" onchange="toggleServiceCard(${i})">
-        ${svc}
+        ${cfg.name}
       </label>
       <div class="service-detail">
+        ${airHtml}
         <div class="photo-pair">
           <div>
             <div class="photo-slot-label before">📷 作業前</div>
@@ -802,23 +783,27 @@ function saveReport() {
   const payment  = document.querySelector('input[name=payment]:checked');
   const notes    = document.getElementById('f-notes').value.trim();
 
-  if (!address)  { showToast('⚠️ 住所を入力してください'); return; }
   if (!platform) { showToast('⚠️ プラットフォームを選択してください'); return; }
   if (!date)     { showToast('⚠️ 作業日を入力してください'); return; }
   if (!amount)   { showToast('⚠️ 合計金額を入力してください'); return; }
   if (!payment)  { showToast('⚠️ 支払い方法を選択してください'); return; }
 
-  // 風量
-  const airflow = AIRFLOW_LOCATIONS.map(loc => ({
-    id: loc.id, label: loc.label,
-    pre:  document.getElementById(`pre-${loc.id}`).value,
-    post: document.getElementById(`post-${loc.id}`).value,
-  }));
+  // 風量（チェック済みサービスから収集）
+  const airflow = [];
+  SERVICE_CONFIG.forEach((cfg, i) => {
+    if (cfg.airflow && document.getElementById(`svc-check-${i}`).checked) {
+      airflow.push({
+        id: cfg.airflow.id, label: cfg.airflow.label,
+        pre:  document.getElementById(`pre-${cfg.airflow.id}`).value,
+        post: document.getElementById(`post-${cfg.airflow.id}`).value,
+      });
+    }
+  });
 
   // サービス
-  const services = SERVICES
-    .map((name, i) => ({
-      name,
+  const services = SERVICE_CONFIG
+    .map((cfg, i) => ({
+      name: cfg.name,
       checked: document.getElementById(`svc-check-${i}`).checked,
       photos: {
         pre:  [...(svcPhotos[i]?.pre  || [])],
@@ -863,13 +848,14 @@ function resetForm() {
   document.getElementById('f-amount').value = '';
   document.getElementById('f-notes').value  = '';
   document.querySelectorAll('input[name=payment]').forEach(r => r.checked = false);
-  AIRFLOW_LOCATIONS.forEach(loc => {
-    document.getElementById(`pre-${loc.id}`).value  = '';
-    document.getElementById(`post-${loc.id}`).value = '';
-  });
-  SERVICES.forEach((_, i) => {
+  SERVICE_CONFIG.forEach((cfg, i) => {
     document.getElementById(`svc-check-${i}`).checked = false;
     document.getElementById(`svc-card-${i}`).classList.remove('checked');
+    // 風量リセット
+    if (cfg.airflow) {
+      document.getElementById(`pre-${cfg.airflow.id}`).value  = '';
+      document.getElementById(`post-${cfg.airflow.id}`).value = '';
+    }
     svcPhotos[i] = { pre: [], post: [] };
     renderSvcPreviews(i, 'pre');
     renderSvcPreviews(i, 'post');
@@ -905,7 +891,7 @@ function renderList() {
       <div class="report-card" onclick="openModal('${r.id}')">
         <div class="rc-date">${formatDate(r.date)}${r.startTime || r.endTime ? '　' + (r.startTime || '') + '〜' + (r.endTime || '') : ''}${r.worker ? '　担当：' + r.worker : ''}</div>
         <div class="rc-name">${displayName}</div>
-        <div class="rc-sub">${r.address}</div>
+        ${r.address ? `<div class="rc-sub">${r.address}</div>` : ''}
         <div class="rc-tags">
           ${r.platform ? `<span class="tag" style="background:#f0f4ff;color:#3a4a8a;">${r.platform}</span>` : ''}
           <span class="tag ${payClass}">${r.payment}</span>
@@ -926,32 +912,23 @@ function openModal(id) {
   const displayName = r.property || '戸建';
   document.getElementById('modalTitle').textContent = displayName;
 
-  // 風量テーブル
-  const airflowWithData = (r.airflow || []).filter(a => a.pre || a.post);
-  const airflowHtml = airflowWithData.length > 0 ? `
-    <div class="detail-section">
-      <h3>風量測定</h3>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <tr style="background:var(--light);">
-          <th style="padding:5px 8px;text-align:left;border:1px solid var(--border);font-size:11px;">箇所</th>
-          <th style="padding:5px 8px;border:1px solid var(--border);font-size:11px;">清掃前</th>
-          <th style="padding:5px 8px;border:1px solid var(--border);font-size:11px;">清掃後</th>
-        </tr>
-        ${airflowWithData.map(a => `
-          <tr>
-            <td style="padding:5px 8px;font-size:13px;font-weight:600;">${a.label}</td>
-            <td style="padding:5px 8px;font-size:13px;text-align:center;">${a.pre ? a.pre + ' m³/h' : '—'}</td>
-            <td style="padding:5px 8px;font-size:13px;text-align:center;">${a.post ? a.post + ' m³/h' : '—'}</td>
-          </tr>
-        `).join('')}
-      </table>
-    </div>` : '';
+  // 風量データをID引き
+  const afMap = {};
+  (r.airflow || []).forEach(a => { afMap[a.id] = a; });
 
   // サービスカード
   const servicesHtml = r.services.length > 0 ? `
     <div class="detail-section">
       <h3>サービス内容</h3>
       ${r.services.map(s => {
+        // 風量（サービス名からairflow IDを判定）
+        const cfgMatch = SERVICE_CONFIG.find(c => c.name === s.name);
+        const af = cfgMatch?.airflow ? afMap[cfgMatch.airflow.id] : null;
+        const afHtml = af && (af.pre || af.post) ? `
+          <div style="background:var(--light);border-radius:6px;padding:6px 10px;margin:6px 0;font-size:12px;">
+            💨 風量：清掃前 <b>${af.pre ? af.pre + ' m³/h' : '—'}</b> → 清掃後 <b>${af.post ? af.post + ' m³/h' : '—'}</b>
+          </div>` : '';
+        // 写真
         const preHtml = s.photos.pre.length > 0
           ? `<div class="detail-photos-grid">${s.photos.pre.map(p => `<img src="${p.dataUrl}" onclick="openLightbox('${p.dataUrl}')" loading="lazy">`).join('')}</div>`
           : '<div class="no-photo">写真なし</div>';
@@ -961,6 +938,7 @@ function openModal(id) {
         return `
           <div class="detail-svc-card">
             <div class="detail-svc-name">${s.name}</div>
+            ${afHtml}
             <div class="detail-photo-pair">
               <div class="detail-photo-col">
                 <div class="detail-photo-col-label before">📷 作業前</div>
@@ -982,14 +960,13 @@ function openModal(id) {
     <div class="detail-section">
       <h3>基本情報</h3>
       <div class="detail-row"><span class="dk">物件名</span><span class="dv" style="font-weight:700;">${displayName}</span></div>
-      <div class="detail-row"><span class="dk">住所</span><span class="dv">${r.address}</span></div>
+      <div class="detail-row"><span class="dk">お客様氏名</span><span class="dv">${r.address || '—'}</span></div>
       <div class="detail-row"><span class="dk">作業日</span><span class="dv">${formatDate(r.date)}</span></div>
       <div class="detail-row"><span class="dk">作業員</span><span class="dv">${r.worker || '—'}</span></div>
       <div class="detail-row"><span class="dk">作業時間</span><span class="dv">${r.startTime || r.endTime ? (r.startTime || '') + ' 〜 ' + (r.endTime || '') : '—'}</span></div>
       <div class="detail-row"><span class="dk">プラットフォーム</span><span class="dv">${r.platform || '—'}</span></div>
     </div>
 
-    ${airflowHtml}
     ${servicesHtml}
 
     <div class="detail-section">
@@ -1035,7 +1012,7 @@ function deleteReport(id) {
 function exportCSV() {
   const reports = getReports();
   if (!reports.length) { showToast('⚠️ 報告がありません'); return; }
-  const headers = ['作業日','開始時刻','終了時刻','物件名','住所','作業員','プラットフォーム','サービス','合計金額','支払い方法','備考'];
+  const headers = ['作業日','開始時刻','終了時刻','物件名','お客様氏名','作業員','プラットフォーム','サービス','合計金額','支払い方法','備考'];
   const rows = reports.map(r => [
     r.date, r.startTime || '', r.endTime || '', r.property || '戸建', r.address, r.worker,
     r.platform || '',
