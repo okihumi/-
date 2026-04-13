@@ -251,9 +251,12 @@
     font-size: 11px; padding: 2px 8px; border-radius: 10px;
     background: var(--light); color: var(--primary); font-weight: 600;
   }
-  .tag.pay-cash { background: #fff3e0; color: #e07b2a; }
-  .tag.pay-card { background: #e8f5e9; color: #27ae60; }
-  .tag.pay-ato  { background: #f3e5f5; color: #7b1fa2; }
+  .tag.pay-cash   { background: #fff3e0; color: #e07b2a; }
+  .tag.pay-card   { background: #e8f5e9; color: #27ae60; }
+  .tag.pay-online { background: #e3f2fd; color: #1565c0; }
+  .tag.pay-paypay { background: #fff1f0; color: #e60033; }
+  .tag.pay-bank   { background: #e8eaf6; color: #283593; }
+  .tag.pay-ato    { background: #f3e5f5; color: #7b1fa2; }
   .empty-state { text-align: center; padding: 60px 20px; color: var(--gray); }
   .empty-state .em-icon { font-size: 48px; margin-bottom: 12px; }
 
@@ -391,7 +394,7 @@
       <input type="text" id="f-address" placeholder="例：山田太郎">
 
       <label class="field-label">プラットフォーム<span class="required">*</span></label>
-      <select id="f-platform">
+      <select id="f-platform" onchange="onPlatformChange()">
         <option value="">選択してください</option>
         <option value="自社HP">自社HP</option>
         <option value="くらしのマーケット">くらしのマーケット</option>
@@ -439,10 +442,13 @@
       <input type="number" id="f-amount" placeholder="例：25300" min="0" step="100">
 
       <label class="field-label">支払い方法<span class="required">*</span></label>
-      <div class="radio-row">
+      <div class="radio-row" id="paymentRow">
         <label class="radio-item"><input type="radio" name="payment" value="現金"> 💴 現金</label>
         <label class="radio-item"><input type="radio" name="payment" value="カード決済"> 💳 カード決済</label>
-        <label class="radio-item"><input type="radio" name="payment" value="ATO払い"> 📱 ATO払い</label>
+        <label class="radio-item kura-only" style="display:none;"><input type="radio" name="payment" value="オンライン決済"> 🌐 オンライン決済</label>
+        <label class="radio-item"><input type="radio" name="payment" value="PayPay"> 📲 PayPay</label>
+        <label class="radio-item"><input type="radio" name="payment" value="銀行振込"> 🏦 銀行振込</label>
+        <label class="radio-item kura-only" style="display:none;"><input type="radio" name="payment" value="ATO払い"> 📱 ATO払い</label>
       </div>
     </div>
   </div>
@@ -729,6 +735,20 @@ function init() {
   renderList();
 }
 
+// ===== プラットフォーム変更時：くらしのマーケット専用支払い方法の表示切替 =====
+function onPlatformChange() {
+  const platform = document.getElementById('f-platform').value;
+  const isKura = platform === 'くらしのマーケット';
+  document.querySelectorAll('#paymentRow .kura-only').forEach(el => {
+    el.style.display = isKura ? '' : 'none';
+    // 非表示時にチェックが入っていたら解除
+    if (!isKura) {
+      const radio = el.querySelector('input[type=radio]');
+      if (radio && radio.checked) radio.checked = false;
+    }
+  });
+}
+
 // ===== サービスカード開閉 =====
 function toggleServiceCard(i) {
   const card = document.getElementById(`svc-card-${i}`);
@@ -869,6 +889,7 @@ function resetForm() {
   document.getElementById('f-start-time').value = '';
   document.getElementById('f-end-time').value = '';
   document.getElementById('f-platform').value = '';
+  onPlatformChange();
   document.getElementById('f-amount').value = '';
   document.getElementById('f-notes').value  = '';
   document.querySelectorAll('input[name=payment]').forEach(r => r.checked = false);
@@ -907,7 +928,7 @@ function renderList() {
   }
 
   container.innerHTML = filtered.map(r => {
-    const payClass = r.payment === '現金' ? 'pay-cash' : r.payment === 'カード決済' ? 'pay-card' : 'pay-ato';
+    const payClass = {'現金':'pay-cash','カード決済':'pay-card','オンライン決済':'pay-online','PayPay':'pay-paypay','銀行振込':'pay-bank','ATO払い':'pay-ato'}[r.payment] || 'pay-ato';
     const displayName = r.property || '戸建';
     return `
       <div class="report-card" onclick="openModal('${r.id}')">
@@ -993,7 +1014,7 @@ function openModal(id) {
       }).join('')}
     </div>` : '';
 
-  const payClass = r.payment === '現金' ? 'pay-cash' : r.payment === 'カード決済' ? 'pay-card' : 'pay-ato';
+  const payClass = {'現金':'pay-cash','カード決済':'pay-card','オンライン決済':'pay-online','PayPay':'pay-paypay','銀行振込':'pay-bank','ATO払い':'pay-ato'}[r.payment] || 'pay-ato';
 
   document.getElementById('modalBody').innerHTML = `
     <div class="detail-section">
