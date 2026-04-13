@@ -119,19 +119,6 @@
   }
   .radio-item input { accent-color: var(--accent); }
 
-  /* ── 風量テーブル ── */
-  .airflow-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-  .airflow-table th {
-    background: var(--light); color: var(--primary);
-    font-size: 11px; padding: 7px 8px; text-align: center;
-    border: 1px solid var(--border);
-  }
-  .airflow-table td { padding: 6px 6px; border: 1px solid var(--border); vertical-align: middle; }
-  .airflow-table td:first-child { font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; }
-  .airflow-table input[type=number] {
-    padding: 6px 8px; font-size: 14px; text-align: right; width: 100%; min-width: 0;
-  }
-
   /* ── サービスカード ── */
   .service-card {
     border: 1.5px solid var(--border); border-radius: 10px;
@@ -400,6 +387,9 @@
       <label class="field-label">物件名<span class="hint">※戸建は無記入</span></label>
       <input type="text" id="f-property" placeholder="例：〇〇マンション101号室">
 
+      <label class="field-label">お客様氏名<span class="hint">※空室の場合は無記入</span></label>
+      <input type="text" id="f-address" placeholder="例：山田太郎">
+
       <label class="field-label">プラットフォーム<span class="required">*</span></label>
       <select id="f-platform">
         <option value="">選択してください</option>
@@ -409,9 +399,6 @@
         <option value="リベ">リベ</option>
         <option value="その他">その他</option>
       </select>
-
-      <label class="field-label">お客様氏名<span class="hint">※空室の場合は無記入</span></label>
-      <input type="text" id="f-address" placeholder="例：山田太郎">
 
       <div class="row2">
         <div>
@@ -428,7 +415,6 @@
           </select>
         </div>
       </div>
-
       <div class="row2">
         <div>
           <label class="field-label">開始時刻</label>
@@ -486,7 +472,7 @@
       📊 Googleスプレッドシートで全員の報告を確認する →
     </button>
   </div>
-  <input class="search-box" type="text" id="searchBox" placeholder="🔍 物件名・住所で検索…" oninput="renderList()">
+  <input class="search-box" type="text" id="searchBox" placeholder="🔍 物件名・お客様氏名で検索…" oninput="renderList()">
   <div id="reportList"></div>
 </div>
 </div>
@@ -581,46 +567,65 @@ async function postToGas(report) {
   const { gasUrl } = getSettings();
   if (!gasUrl) return;
   try {
-    // 写真を圧縮（GAS送信用に小さく）
+    // 写真を圧縮（GAS送信用に小さく：最大400px, 品質0.35）
     const compressed = JSON.parse(JSON.stringify(report));
     for (const svc of compressed.services || []) {
       for (const phase of ['pre', 'post']) {
         svc.photos[phase] = await Promise.all(
-          (svc.photos[phase] || []).map(p => compressForGas(p.dataUrl).then(d => ({ ...p, dataUrl: d })))
+          (svc.photos[phase] || []).map(p =>
+            compressForGas(p.dataUrl).then(d => ({ name: p.name, dataUrl: d }))
+          )
         );
       }
     }
-    fetch(gasUrl, {
+
+    // ペイロードサイズチェック（5MB超なら写真を除外して送信）
+    let body = JSON.stringify(compressed);
+    if (body.length > 5 * 1024 * 1024) {
+      console.warn('ペイロードが大きすぎるため写真を除外して送信');
+      for (const svc of compressed.services || []) {
+        for (const phase of ['pre', 'post']) {
+          svc.photos[phase] = svc.photos[phase].map(p => ({ name: p.name, dataUrl: '' }));
+        }
+      }
+      compressed._photosTooLarge = true;
+      body = JSON.stringify(compressed);
+      showToast('⚠️ 写真が多すぎるため、写真なしで送信しました');
+    }
+
+    await fetch(gasUrl, {
       method:  'POST',
       mode:    'no-cors',
       headers: { 'Content-Type': 'text/plain' },
-      body:    JSON.stringify(compressed),
+      body:    body,
     });
     // no-corsのためレスポンスは読めないが送信は完了
     updateSyncDot('ok');
+    showToast('✅ クラウドへの送信が完了しました');
     // ローカルに送信済みマーク
     const reports = getReports();
     const idx = reports.findIndex(r => r.id === report.id);
     if (idx !== -1) { reports[idx].synced = true; saveReports(reports); }
   } catch (err) {
     updateSyncDot('err');
+    showToast('❌ クラウド送信に失敗しました。後で再送できます。');
     console.warn('GAS送信エラー:', err);
   }
 }
 
-// 写真をGAS送信用に圧縮（最大600px, 品質0.5）
+// 写真をGAS送信用に圧縮（最大400px, 品質0.35）
 function compressForGas(dataUrl) {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const ratio  = Math.min(1, 600 / Math.max(img.width, img.height));
+      const ratio  = Math.min(1, 400 / Math.max(img.width, img.height));
       canvas.width  = img.width  * ratio;
       canvas.height = img.height * ratio;
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.5));
+      resolve(canvas.toDataURL('image/jpeg', 0.35));
     };
-    img.onerror = () => resolve(dataUrl);
+    img.onerror = () => resolve('');
     img.src = dataUrl;
   });
 }
@@ -643,7 +648,10 @@ function getReports() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
   catch { return []; }
 }
-function saveReports(arr) { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+function saveReports(arr) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+  catch(e) { console.warn('localStorage保存エラー:', e); }
+}
 
 // ===== 初期化 =====
 function init() {
@@ -653,7 +661,7 @@ function init() {
   SERVICE_CONFIG.forEach((cfg, i) => {
     svcPhotos[i] = { pre: [], post: [] };
 
-    // 隠しファイル入力（前・後）
+    // 隠しファイル入力（前・後）— captureなしでギャラリーも選択可
     ['pre','post'].forEach(phase => {
       const inp = document.createElement('input');
       inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
@@ -662,7 +670,7 @@ function init() {
       hiddenInputs.appendChild(inp);
     });
 
-    // 風量測定HTML
+    // 風量測定HTML（対応サービスのみ表示）
     const airHtml = cfg.airflow ? `
       <div style="background:var(--light);border-radius:8px;padding:10px 12px;margin-top:8px;">
         <div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:6px;">💨 風量測定（${cfg.airflow.label}）</div>
@@ -711,6 +719,7 @@ function init() {
     container.appendChild(card);
   });
 
+  // 作業日デフォルトをJST現在日
   document.getElementById('f-date').value = new Date(Date.now() + 9*3600000).toISOString().slice(0,10);
 
   // 設定済みならsyncDotを表示
@@ -773,16 +782,16 @@ function removeSvcPhoto(svcIndex, phase, j) {
 
 // ===== 保存 =====
 function saveReport() {
-  const property = document.getElementById('f-property').value.trim();
-  const address  = document.getElementById('f-address').value.trim();
+  const property  = document.getElementById('f-property').value.trim();
+  const address   = document.getElementById('f-address').value.trim();
   const date      = document.getElementById('f-date').value;
   const worker    = document.getElementById('f-worker').value;
   const startTime = document.getElementById('f-start-time').value;
   const endTime   = document.getElementById('f-end-time').value;
   const platform  = document.getElementById('f-platform').value;
-  const amount   = document.getElementById('f-amount').value;
-  const payment  = document.querySelector('input[name=payment]:checked');
-  const notes    = document.getElementById('f-notes').value.trim();
+  const amount    = document.getElementById('f-amount').value;
+  const payment   = document.querySelector('input[name=payment]:checked');
+  const notes     = document.getElementById('f-notes').value.trim();
 
   if (!platform) { showToast('⚠️ プラットフォームを選択してください'); return; }
   if (!date)     { showToast('⚠️ 作業日を入力してください'); return; }
@@ -801,8 +810,8 @@ function saveReport() {
     }
   });
 
-  // サービス
-  const services = SERVICE_CONFIG
+  // サービス（写真付き：GAS送信用）
+  const servicesWithPhotos = SERVICE_CONFIG
     .map((cfg, i) => ({
       name: cfg.name,
       checked: document.getElementById(`svc-check-${i}`).checked,
@@ -813,28 +822,42 @@ function saveReport() {
     }))
     .filter(s => s.checked);
 
-  const report = {
-    id:        Date.now().toString(),
+  // サービス（写真なし：localStorage用 — 容量節約）
+  const servicesForLocal = servicesWithPhotos.map(s => ({
+    name: s.name, checked: s.checked,
+    photos: {
+      pre:  s.photos.pre.map(p => ({ name: p.name })),
+      post: s.photos.post.map(p => ({ name: p.name })),
+    },
+    photoCount: { pre: s.photos.pre.length, post: s.photos.post.length }
+  }));
+
+  const reportId = Date.now().toString();
+  const baseData = {
+    id: reportId,
     property, address, date, worker, startTime, endTime, platform,
-    amount:    parseInt(amount),
-    payment:   payment.value,
-    airflow, services, notes,
+    amount: parseInt(amount),
+    payment: payment.value,
+    airflow, notes,
     createdAt: new Date().toISOString(),
   };
 
+  // localStorageには写真データを含めない（容量節約）
+  const reportForLocal = { ...baseData, services: servicesForLocal };
   const reports = getReports();
-  reports.unshift(report);
+  reports.unshift(reportForLocal);
   saveReports(reports);
 
   showToast('✅ 作業報告を保存しました');
   resetForm();
   switchTab('list');
 
-  // クラウドに非同期送信
+  // クラウドに非同期送信（写真付き）
   const { gasUrl } = getSettings();
   if (gasUrl) {
     showToast('☁️ クラウドに送信中...');
-    postToGas(report);
+    const reportForGas = { ...baseData, services: servicesWithPhotos };
+    postToGas(reportForGas);
   }
 }
 
@@ -852,14 +875,13 @@ function resetForm() {
   SERVICE_CONFIG.forEach((cfg, i) => {
     document.getElementById(`svc-check-${i}`).checked = false;
     document.getElementById(`svc-card-${i}`).classList.remove('checked');
-    // 風量リセット
+    svcPhotos[i] = { pre: [], post: [] };
+    renderSvcPreviews(i, 'pre');
+    renderSvcPreviews(i, 'post');
     if (cfg.airflow) {
       document.getElementById(`pre-${cfg.airflow.id}`).value  = '';
       document.getElementById(`post-${cfg.airflow.id}`).value = '';
     }
-    svcPhotos[i] = { pre: [], post: [] };
-    renderSvcPreviews(i, 'pre');
-    renderSvcPreviews(i, 'post');
   });
 }
 
@@ -870,12 +892,11 @@ function renderList() {
   const filtered = q
     ? reports.filter(r =>
         (r.property || '').toLowerCase().includes(q) ||
-        r.address.toLowerCase().includes(q)
+        (r.address || '').toLowerCase().includes(q)
       )
     : reports;
 
   document.getElementById('listCount').textContent = `報告一覧（${filtered.length}件）`;
-  // スプレッドシートURLが設定されていればバナーを表示
   const { sheetUrl } = getSettings();
   document.getElementById('cloudBanner').style.display = sheetUrl ? 'block' : 'none';
   const container = document.getElementById('reportList');
@@ -890,9 +911,9 @@ function renderList() {
     const displayName = r.property || '戸建';
     return `
       <div class="report-card" onclick="openModal('${r.id}')">
-        <div class="rc-date">${formatDate(r.date)}${r.startTime || r.endTime ? '　' + (r.startTime || '') + '〜' + (r.endTime || '') : ''}${r.worker ? '　担当：' + r.worker : ''}</div>
+        <div class="rc-date">${formatDate(r.date)}${r.startTime ? ' ' + r.startTime : ''}${r.endTime ? '〜' + r.endTime : ''}${r.worker ? '　担当：' + r.worker : ''}</div>
         <div class="rc-name">${displayName}</div>
-        ${r.address ? `<div class="rc-sub">${r.address}</div>` : ''}
+        <div class="rc-sub">${r.address || ''}</div>
         <div class="rc-tags">
           ${r.platform ? `<span class="tag" style="background:#f0f4ff;color:#3a4a8a;">${r.platform}</span>` : ''}
           <span class="tag ${payClass}">${r.payment}</span>
@@ -913,33 +934,50 @@ function openModal(id) {
   const displayName = r.property || '戸建';
   document.getElementById('modalTitle').textContent = displayName;
 
-  // 風量データをID引き
-  const afMap = {};
-  (r.airflow || []).forEach(a => { afMap[a.id] = a; });
+  // 風量テーブル
+  const airflowWithData = (r.airflow || []).filter(a => a.pre || a.post);
+  const airflowHtml = airflowWithData.length > 0 ? `
+    <div class="detail-section">
+      <h3>風量測定</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <tr style="background:var(--light);">
+          <th style="padding:5px 8px;text-align:left;border:1px solid var(--border);font-size:11px;">箇所</th>
+          <th style="padding:5px 8px;border:1px solid var(--border);font-size:11px;">清掃前</th>
+          <th style="padding:5px 8px;border:1px solid var(--border);font-size:11px;">清掃後</th>
+        </tr>
+        ${airflowWithData.map(a => `
+          <tr>
+            <td style="padding:5px 8px;font-size:13px;font-weight:600;">${a.label}</td>
+            <td style="padding:5px 8px;font-size:13px;text-align:center;">${a.pre ? a.pre + ' m³/h' : '—'}</td>
+            <td style="padding:5px 8px;font-size:13px;text-align:center;">${a.post ? a.post + ' m³/h' : '—'}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>` : '';
 
-  // サービスカード
+  // サービスカード（写真はlocalStorageに保存しなくなったため、枚数表示に変更）
   const servicesHtml = r.services.length > 0 ? `
     <div class="detail-section">
       <h3>サービス内容</h3>
       ${r.services.map(s => {
-        // 風量（サービス名からairflow IDを判定）
-        const cfgMatch = SERVICE_CONFIG.find(c => c.name === s.name);
-        const af = cfgMatch?.airflow ? afMap[cfgMatch.airflow.id] : null;
-        const afHtml = af && (af.pre || af.post) ? `
-          <div style="background:var(--light);border-radius:6px;padding:6px 10px;margin:6px 0;font-size:12px;">
-            💨 風量：清掃前 <b>${af.pre ? af.pre + ' m³/h' : '—'}</b> → 清掃後 <b>${af.post ? af.post + ' m³/h' : '—'}</b>
-          </div>` : '';
-        // 写真
-        const preHtml = s.photos.pre.length > 0
-          ? `<div class="detail-photos-grid">${s.photos.pre.map(p => `<img src="${p.dataUrl}" onclick="openLightbox('${p.dataUrl}')" loading="lazy">`).join('')}</div>`
-          : '<div class="no-photo">写真なし</div>';
-        const postHtml = s.photos.post.length > 0
-          ? `<div class="detail-photos-grid">${s.photos.post.map(p => `<img src="${p.dataUrl}" onclick="openLightbox('${p.dataUrl}')" loading="lazy">`).join('')}</div>`
-          : '<div class="no-photo">写真なし</div>';
+        const preCount  = s.photoCount ? s.photoCount.pre  : (s.photos?.pre?.length  || 0);
+        const postCount = s.photoCount ? s.photoCount.post : (s.photos?.post?.length || 0);
+        const hasPreData  = s.photos?.pre?.some(p => p.dataUrl);
+        const hasPostData = s.photos?.post?.some(p => p.dataUrl);
+
+        const preHtml = hasPreData
+          ? `<div class="detail-photos-grid">${s.photos.pre.filter(p=>p.dataUrl).map(p => `<img src="${p.dataUrl}" onclick="openLightbox('${p.dataUrl}')" loading="lazy">`).join('')}</div>`
+          : preCount > 0
+            ? `<div class="no-photo">📷 ${preCount}枚（クラウドに送信済み）</div>`
+            : '<div class="no-photo">写真なし</div>';
+        const postHtml = hasPostData
+          ? `<div class="detail-photos-grid">${s.photos.post.filter(p=>p.dataUrl).map(p => `<img src="${p.dataUrl}" onclick="openLightbox('${p.dataUrl}')" loading="lazy">`).join('')}</div>`
+          : postCount > 0
+            ? `<div class="no-photo">📷 ${postCount}枚（クラウドに送信済み）</div>`
+            : '<div class="no-photo">写真なし</div>';
         return `
           <div class="detail-svc-card">
             <div class="detail-svc-name">${s.name}</div>
-            ${afHtml}
             <div class="detail-photo-pair">
               <div class="detail-photo-col">
                 <div class="detail-photo-col-label before">📷 作業前</div>
@@ -962,12 +1000,12 @@ function openModal(id) {
       <h3>基本情報</h3>
       <div class="detail-row"><span class="dk">物件名</span><span class="dv" style="font-weight:700;">${displayName}</span></div>
       <div class="detail-row"><span class="dk">お客様氏名</span><span class="dv">${r.address || '—'}</span></div>
-      <div class="detail-row"><span class="dk">作業日</span><span class="dv">${formatDate(r.date)}</span></div>
+      <div class="detail-row"><span class="dk">作業日</span><span class="dv">${formatDate(r.date)}${r.startTime ? ' ' + r.startTime : ''}${r.endTime ? '〜' + r.endTime : ''}</span></div>
       <div class="detail-row"><span class="dk">作業員</span><span class="dv">${r.worker || '—'}</span></div>
-      <div class="detail-row"><span class="dk">作業時間</span><span class="dv">${r.startTime || r.endTime ? (r.startTime || '') + ' 〜 ' + (r.endTime || '') : '—'}</span></div>
       <div class="detail-row"><span class="dk">プラットフォーム</span><span class="dv">${r.platform || '—'}</span></div>
     </div>
 
+    ${airflowHtml}
     ${servicesHtml}
 
     <div class="detail-section">
@@ -1015,7 +1053,8 @@ function exportCSV() {
   if (!reports.length) { showToast('⚠️ 報告がありません'); return; }
   const headers = ['作業日','開始時刻','終了時刻','物件名','お客様氏名','作業員','プラットフォーム','サービス','合計金額','支払い方法','備考'];
   const rows = reports.map(r => [
-    r.date, r.startTime || '', r.endTime || '', r.property || '戸建', r.address, r.worker,
+    r.date, r.startTime || '', r.endTime || '',
+    r.property || '戸建', r.address || '', r.worker,
     r.platform || '',
     (r.services || []).map(s => s.name).join(' / '),
     r.amount, r.payment,
@@ -1025,7 +1064,7 @@ function exportCSV() {
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url;
-  a.download = `メイクリア_作業報告_${new Date(Date.now() + 9*3600000).toISOString().slice(0,10)}.csv`;
+  a.download = `メイクリア_作業報告_${new Date().toISOString().slice(0,10)}.csv`;
   a.click(); URL.revokeObjectURL(url);
   showToast('📊 CSVを出力しました');
 }
